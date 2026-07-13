@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Neon Rider - Bike Race</title>
+<title> घोड़ी भागदौड़</title>
 <style>
   :root{
     --bg-deep:#0a0a1a;
@@ -124,7 +124,7 @@
   <canvas id="game" width="380" height="640"></canvas>
 
   <div id="hud">
-    <div>SCORE: <span id="scoreVal">0</span></div>
+    <div: score<span id="scoreVal">0</span></div>
     <div class="speed">SPEED: <span id="speedVal">0</span></div>
   </div>
 
@@ -134,9 +134,9 @@
   </div>
 
   <div id="overlay">
-    <h1>NEON RIDER</h1>
-    <p>Sadak par bhaago, gaadiyon se bacho! Left/Right tap karo ya swipe karo bike chalane ke liye.</p>
-    <button id="startBtn">START RACE</button>
+    <h1>इंडियन घोड़ी भागदौड़</h1>
+    <p>gand marao bsd walo.</p>
+    <button id="startBtn"> Start kar bhadwe</button>
   </div>
 </div>
 
@@ -315,10 +315,10 @@ function update(){
 function showGameOver(){
   const overlay = document.getElementById('overlay');
   overlay.innerHTML = `
-    <h1>CRASH!</h1>
+    <h1> gand marao ab!</h1>
     <div class="score-final">Final Score: ${score}</div>
-    <p>Phir se try karo aur apna record todo!</p>
-    <button id="restartBtn">RACE AGAIN</button>
+    <p>aahhhhhhh chaddi gili gardi apne toh</p>
+    <button id="restartBtn"> Dubara khelega</button>
   `;
   overlay.style.display = 'flex';
   document.getElementById('restartBtn').addEventListener('click', ()=>{
