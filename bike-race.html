@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Neon Rider - Bike Race</title>
+<style>
+  :root{
+    --bg-deep:#0a0a1a;
+    --road:#1a1a2e;
+    --neon-cyan:#00f5ff;
+    --neon-pink:#ff2d95;
+    --neon-yellow:#ffe135;
+    --line-white:#e8e8f0;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;}
+  html,body{
+    height:100%;
+    background:var(--bg-deep);
+    font-family:'Courier New', monospace;
+    overflow:hidden;
+    touch-action:none;
+  }
+  #gameWrap{
+    position:relative;
+    width:100%;
+    height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  canvas{
+    background:linear-gradient(180deg, #0a0a1a 0%, #1a1a2e 100%);
+    display:block;
+    max-width:100%;
+    max-height:100vh;
+    box-shadow:0 0 40px rgba(0,245,255,0.15);
+  }
+  #hud{
+    position:absolute;
+    top:14px;
+    left:14px;
+    right:14px;
+    display:flex;
+    justify-content:space-between;
+    color:var(--neon-cyan);
+    font-size:18px;
+    font-weight:bold;
+    text-shadow:0 0 8px var(--neon-cyan);
+    letter-spacing:1px;
+    pointer-events:none;
+  }
+  #hud .speed{color:var(--neon-pink); text-shadow:0 0 8px var(--neon-pink);}
+  #overlay{
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    background:rgba(10,10,26,0.9);
+    text-align:center;
+    padding:20px;
+  }
+  #overlay h1{
+    color:var(--neon-cyan);
+    font-size:clamp(28px,8vw,44px);
+    text-shadow:0 0 12px var(--neon-cyan), 0 0 24px var(--neon-pink);
+    letter-spacing:3px;
+    margin-bottom:8px;
+  }
+  #overlay p{
+    color:var(--line-white);
+    font-size:14px;
+    opacity:0.7;
+    margin-bottom:20px;
+    max-width:280px;
+  }
+  #overlay .score-final{
+    color:var(--neon-yellow);
+    font-size:20px;
+    margin-bottom:18px;
+    text-shadow:0 0 8px var(--neon-yellow);
+  }
+  button{
+    background:transparent;
+    border:2px solid var(--neon-pink);
+    color:var(--neon-pink);
+    padding:14px 36px;
+    font-size:18px;
+    font-family:inherit;
+    font-weight:bold;
+    letter-spacing:2px;
+    border-radius:30px;
+    text-shadow:0 0 8px var(--neon-pink);
+    box-shadow:0 0 16px rgba(255,45,149,0.4);
+  }
+  button:active{
+    background:var(--neon-pink);
+    color:var(--bg-deep);
+  }
+  #controls{
+    position:absolute;
+    bottom:0;
+    left:0;
+    right:0;
+    display:flex;
+    height:35%;
+    z-index:5;
+  }
+  .ctrlBtn{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:rgba(0,245,255,0.25);
+    font-size:40px;
+  }
+  #hidden{display:none;}
+</style>
+</head>
+<body>
+<div id="gameWrap">
+  <canvas id="game" width="380" height="640"></canvas>
+
+  <div id="hud">
+    <div>SCORE: <span id="scoreVal">0</span></div>
+    <div class="speed">SPEED: <span id="speedVal">0</span></div>
+  </div>
+
+  <div id="controls">
+    <div class="ctrlBtn" id="leftZone">◀</div>
+    <div class="ctrlBtn" id="rightZone">▶</div>
+  </div>
+
+  <div id="overlay">
+    <h1>NEON RIDER</h1>
+    <p>Sadak par bhaago, gaadiyon se bacho! Left/Right tap karo ya swipe karo bike chalane ke liye.</p>
+    <button id="startBtn">START RACE</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+const LANES = 3;
+const roadMarginPct = 0.12;
+const roadLeft = W * roadMarginPct;
+const roadRight = W * (1 - roadMarginPct);
+const roadWidth = roadRight - roadLeft;
+const laneWidth = roadWidth / LANES;
+
+function laneX(laneIndex){
+  return roadLeft + laneWidth * laneIndex + laneWidth/2;
+}
+
+let state = 'menu'; // menu | playing | over
+let score = 0;
+let speed = 0;
+let baseSpeed = 4;
+let maxSpeed = 13;
+let distance = 0;
+let roadOffset = 0;
+
+let player = {
+  lane: 1,
+  x: laneX(1),
+  targetX: laneX(1),
+  y: H - 120,
+  w: 34,
+  h: 58,
+  tilt: 0
+};
+
+let obstacles = [];
+let spawnTimer = 0;
+let spawnInterval = 70;
+
+let particles = []; // speed lines
+
+function resetGame(){
+  score = 0;
+  speed = baseSpeed;
+  distance = 0;
+  player.lane = 1;
+  player.x = laneX(1);
+  player.targetX = laneX(1);
+  obstacles = [];
+  spawnTimer = 0;
+  spawnInterval = 70;
+  particles = [];
+}
+
+function moveLeft(){
+  if(state !== 'playing') return;
+  if(player.lane > 0){
+    player.lane--;
+    player.targetX = laneX(player.lane);
+  }
+}
+function moveRight(){
+  if(state !== 'playing') return;
+  if(player.lane < LANES - 1){
+    player.lane++;
+    player.targetX = laneX(player.lane);
+  }
+}
+
+// Touch / click controls
+document.getElementById('leftZone').addEventListener('touchstart', e=>{e.preventDefault();moveLeft();});
+document.getElementById('rightZone').addEventListener('touchstart', e=>{e.preventDefault();moveRight();});
+document.getElementById('leftZone').addEventListener('click', moveLeft);
+document.getElementById('rightZone').addEventListener('click', moveRight);
+
+// Swipe controls on canvas
+let touchStartX = null;
+canvas.addEventListener('touchstart', e=>{
+  touchStartX = e.touches[0].clientX;
+});
+canvas.addEventListener('touchend', e=>{
+  if(touchStartX === null) return;
+  let dx = e.changedTouches[0].clientX - touchStartX;
+  if(Math.abs(dx) > 30){
+    if(dx > 0) moveRight(); else moveLeft();
+  }
+  touchStartX = null;
+});
+
+// Keyboard for desktop testing
+window.addEventListener('keydown', e=>{
+  if(e.key === 'ArrowLeft') moveLeft();
+  if(e.key === 'ArrowRight') moveRight();
+});
+
+document.getElementById('startBtn').addEventListener('click', ()=>{
+  resetGame();
+  state = 'playing';
+  document.getElementById('overlay').style.display = 'none';
+});
+
+function spawnObstacle(){
+  let lane = Math.floor(Math.random()*LANES);
+  let type = Math.random() < 0.5 ? 'car' : 'bike';
+  let colors = ['#ff2d95','#ffe135','#00f5ff','#ff6b35'];
+  obstacles.push({
+    lane: lane,
+    x: laneX(lane),
+    y: -80,
+    w: type === 'car' ? 46 : 30,
+    h: type === 'car' ? 70 : 54,
+    type: type,
+    color: colors[Math.floor(Math.random()*colors.length)]
+  });
+}
+
+function rectsOverlap(a, b){
+  return Math.abs(a.x - b.x) < (a.w + b.w)/2 * 0.75 &&
+         Math.abs(a.y - b.y) < (a.h + b.h)/2 * 0.75;
+}
+
+function update(){
+  if(state !== 'playing') return;
+
+  distance += speed;
+  score = Math.floor(distance / 10);
+  speed = Math.min(maxSpeed, baseSpeed + score * 0.02);
+
+  // smooth lane change
+  player.x += (player.targetX - player.x) * 0.25;
+  player.tilt = (player.targetX - player.x) * 0.03;
+
+  // road scroll
+  roadOffset += speed;
+  if(roadOffset > 40) roadOffset -= 40;
+
+  // spawn
+  spawnTimer++;
+  let curInterval = Math.max(28, spawnInterval - score*0.3);
+  if(spawnTimer > curInterval){
+    spawnTimer = 0;
+    spawnObstacle();
+  }
+
+  // update obstacles
+  for(let o of obstacles){
+    o.y += speed;
+  }
+  obstacles = obstacles.filter(o => o.y < H + 100);
+
+  // collision
+  for(let o of obstacles){
+    if(rectsOverlap(player, o)){
+      state = 'over';
+      showGameOver();
+    }
+  }
+
+  // particles (speed lines on shoulders)
+  if(Math.random() < 0.5){
+    particles.push({
+      x: Math.random() < 0.5 ? roadLeft - 15 - Math.random()*20 : roadRight + 15 + Math.random()*20,
+      y: -10,
+      len: 20 + Math.random()*20
+    });
+  }
+  for(let p of particles) p.y += speed * 1.5;
+  particles = particles.filter(p => p.y < H + 30);
+
+  document.getElementById('scoreVal').textContent = score;
+  document.getElementById('speedVal').textContent = Math.floor(speed * 12);
+}
+
+function showGameOver(){
+  const overlay = document.getElementById('overlay');
+  overlay.innerHTML = `
+    <h1>CRASH!</h1>
+    <div class="score-final">Final Score: ${score}</div>
+    <p>Phir se try karo aur apna record todo!</p>
+    <button id="restartBtn">RACE AGAIN</button>
+  `;
+  overlay.style.display = 'flex';
+  document.getElementById('restartBtn').addEventListener('click', ()=>{
+    resetGame();
+    state = 'playing';
+    overlay.style.display = 'none';
+  });
+}
+
+function drawRoad(){
+  ctx.fillStyle = '#0a0a1a';
+  ctx.fillRect(0,0,W,H);
+
+  // road
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(roadLeft, 0, roadWidth, H);
+
+  // neon edges
+  ctx.strokeStyle = '#00f5ff';
+  ctx.lineWidth = 3;
+  ctx.shadowColor = '#00f5ff';
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.moveTo(roadLeft, 0); ctx.lineTo(roadLeft, H);
+  ctx.moveTo(roadRight, 0); ctx.lineTo(roadRight, H);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // lane dashes
+  ctx.strokeStyle = 'rgba(232,232,240,0.5)';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([20,20]);
+  for(let i=1;i<LANES;i++){
+    let x = roadLeft + laneWidth*i;
+    ctx.beginPath();
+    ctx.moveTo(x, -40 + roadOffset);
+    ctx.lineTo(x, H);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // speed particles
+  ctx.strokeStyle = 'rgba(255,45,149,0.5)';
+  ctx.lineWidth = 2;
+  for(let p of particles){
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x, p.y - p.len);
+    ctx.stroke();
+  }
+}
+
+function drawBike(x, y, w, h, color, tilt){
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(tilt || 0);
+  // wheels
+  ctx.fillStyle = '#111';
+  ctx.beginPath();
+  ctx.ellipse(0, h/2 - 6, w/2.6, 7, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(0, -h/2 + 6, w/2.6, 7, 0, 0, Math.PI*2);
+  ctx.fill();
+  // body
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 14;
+  ctx.beginPath();
+  ctx.moveTo(0, -h/2);
+  ctx.lineTo(w/2, h/2 - 10);
+  ctx.lineTo(w/2 - 6, h/2);
+  ctx.lineTo(-w/2 + 6, h/2);
+  ctx.lineTo(-w/2, h/2 - 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  // helmet highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.beginPath();
+  ctx.ellipse(0, -h/2 + 14, w/5, 8, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawCar(x, y, w, h, color){
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 14;
+  ctx.beginPath();
+  ctx.roundRect ? ctx.roundRect(-w/2, -h/2, w, h, 8) : ctx.rect(-w/2, -h/2, w, h);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  // windshield
+  ctx.fillStyle = 'rgba(20,20,40,0.8)';
+  ctx.fillRect(-w/2 + 5, -h/2 + 10, w - 10, 16);
+  ctx.restore();
+}
+
+function draw(){
+  drawRoad();
+
+  for(let o of obstacles){
+    if(o.type === 'car') drawCar(o.x, o.y, o.w, o.h, o.color);
+    else drawBike(o.x, o.y, o.w, o.h, o.color, 0);
+  }
+
+  if(state === 'playing' || state === 'over'){
+    drawBike(player.x, player.y, player.w, player.h, '#ffe135', player.tilt);
+  }
+}
+
+function loop(){
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
